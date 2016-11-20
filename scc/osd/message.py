@@ -35,7 +35,7 @@ class Message(OSDWindow):
 	
 	def _add_arguments(self):
 		OSDWindow._add_arguments(self)
-		self.argparser.add_argument('-t', type=float, metavar="seconds",
+		self.argparser.add_argument('--timeout', '-t', type=float, metavar="seconds",
 				default=5, help="time before message is hidden (default: 5)")
 		self.argparser.add_argument('text', type=str, help="text to display")
 	
@@ -44,5 +44,5 @@ class Message(OSDWindow):
 		if not OSDWindow.parse_argumets(self, argv):
 			return False
 		self.text = self.args.text
-		self.timeout = self.args.t
+		self.timeout = self.args.timeout
 		return True	

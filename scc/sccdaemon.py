@@ -187,8 +187,8 @@ class SCCDaemon(Daemon):
 				# by scc-osd-daemon.
 				self.osd_daemon.gesture_action = action
 				self._osd('gesture',
-					"--controller", mapper.get_controller().get_id(),
-				 	'--control-with', what)
+					controller = mapper.get_controller().get_id(),
+				 	control_with = what)
 				log.debug("Gesture detection request sent to scc-osd-daemon")
 			else:
 				# Otherwise it is handled internally
@@ -205,12 +205,17 @@ class SCCDaemon(Daemon):
 			gd.whole(mapper, x, y, what)
 	
 	
-	def _osd(self, *data):
+	def _osd(self, command, *data, **kws):
 		"""
 		Has to be called with self.lock held.
 		Returns True on success.
 		"""
 		# Pre-format data
+		data = list(data)
+		for key in kws:
+			if kws[key]:
+				data = [ "--%s" % key.replace("_", "-"), kws[key] ] + data
+		data = [ command ] + data
 		data = b"OSD: %s\n" % (shjoin(data) ,)
 		
 		# Check if scc-osd-daemon is available
@@ -231,13 +236,13 @@ class SCCDaemon(Daemon):
 	def on_sa_osd(self, mapper, action):
 		""" Called when 'osd' action is used """
 		with self.lock:
-			self._osd('message', '-t', action.timeout, action.text)
+			self._osd('message', action.text, timeout = action.timeout)
 	
 	
 	def on_sa_area(self, mapper, action, x1, y1, x2, y2):
 		""" Called when *AreaAction has OSD enabled """
 		with self.lock:
-			self._osd('area', '-x', x1, '-y', y1, '--width', x2-x1, '--height', y2-y1)
+			self._osd('area', x = x1, y = y1, width = x2-x1, height = y2-y1)
 	
 	
 	def on_sa_clear_osd(self, *a):
@@ -253,26 +258,25 @@ class SCCDaemon(Daemon):
 	
 	def on_sa_menu(self, mapper, action, *pars):
 		""" Called when 'menu' action is used """
-		p = [ action.MENU_TYPE,
-			"--confirm-with", nameof(action.confirm_with),
-			"--cancel-with", nameof(action.cancel_with)
-		]
-		if mapper.get_controller():
-			p += [ "--controller", mapper.get_controller().get_id() ]
+		source = None
 		if "." in action.menu_id:
 			path = find_menu(action.menu_id)
 			if not path:
 				log.error("Cannot show menu: Menu '%s' not found", action.menu_id)
 				return
-			p += [ "--from-file", path ]
+			source = ("--from-file", path )
 		else:
-			p += [ "--from-profile", mapper.profile.get_filename(), action.menu_id ]
-		p += list(pars)
+			source = ( "--from-profile", mapper.profile.get_filename(), action.menu_id )
 		
 		with self.lock:
-			self._osd(*p)
+			self._osd(action.MENU_TYPE, *source,
+				confirm_with = nameof(action.confirm_with),
+				cancel_with = nameof(action.cancel_with),
+				controller = mapper.get_controller().get_id()
+			)
 	
 	on_sa_gridmenu = on_sa_menu
+	on_sa_radialmenu = on_sa_menu
 	
 	
 	def on_sa_profile(self, mapper, action):
