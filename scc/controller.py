@@ -20,7 +20,7 @@
 # THE SOFTWARE.
 
 from scc.constants import HapticPos
-import logging
+import logging, struct, binascii
 
 log = logging.getLogger("SCController")
 
@@ -148,6 +148,22 @@ class HapticData(object):
 		
 		self.data = data				# send to controller
 		self.frequency = frequency		# used internally
+	
+	
+	def encode(self):
+		"""
+		Returns hapticdata values encoded in single string without spaces,
+		so it can be sent through socket or used as shell command argument.
+		"""
+		# frequency is used internally, so its not sent
+		return binascii.hexlify(struct.pack('<BHHH', *self.data))
+	
+	
+	@staticmethod
+	def decode(data):
+		hd = HapticData(HapticPos.LEFT, frequency=1)
+		hd.data = struct.unpack('<BHHH', binascii.unhexlify(data))
+		return hd
 	
 	
 	def with_position(self, position):

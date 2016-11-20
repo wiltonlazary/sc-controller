@@ -904,8 +904,6 @@ class FeedbackModifier(Modifier):
 	
 	def _mod_init(self, position, amplitude=512, frequency=4, period=1024, count=1):
 		self.haptic = HapticData(position, amplitude, frequency, period, count)
-		if self.action and hasattr(self.action.strip(), "set_haptic"):
-			self.action.strip().set_haptic(self.haptic)
 	
 	
 	def encode(self):
@@ -938,11 +936,9 @@ class FeedbackModifier(Modifier):
 		return "<with Feedback %s>" % (self.action,)
 	
 	
-	def strip(self):
-		return self.action.strip()
-	
-	
 	def compress(self):
+		if hasattr(self.action.strip(), "set_haptic"):
+			self.action.strip().set_haptic(self.haptic)
 		return self.action.compress()
 
 

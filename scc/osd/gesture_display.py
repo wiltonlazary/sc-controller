@@ -11,10 +11,11 @@ from scc.tools import _, set_logging_level
 from gi.repository import Gtk, GObject
 from scc.gui.daemon_manager import DaemonManager
 from scc.gui.gestures import GestureDraw
+from scc.gestures import GestureDetector
+from scc.controller import HapticData
 from scc.constants import LEFT, RIGHT
 from scc.config import Config
 from scc.osd import OSDWindow
-from scc.gestures import GestureDetector
 BOTH = "BOTH"
 
 import logging
@@ -49,6 +50,7 @@ class GestureDisplay(OSDWindow):
 		self._left_detector  = GestureDetector(0, self._on_gesture_finished)
 		# self._right_detector = GestureDetector(0, self._on_gesture_finished)
 		self._control_with = LEFT
+		self._feedback = None
 		self._eh_ids = []
 		self._gesture = None
 		
@@ -97,6 +99,8 @@ class GestureDisplay(OSDWindow):
 		self.argparser.add_argument('--control-with', '-c', type=str,
 			metavar="option", default=LEFT, choices=(LEFT, RIGHT),
 			help="which pad should be used to generate gesture menu (default: %s)" % (LEFT,))
+		self.argparser.add_argument('--feedback', type=str, default=None,
+			help="what feedback should be generated durring gesture recognition (default: none)")
 	
 	
 	def parse_argumets(self, argv):
@@ -107,6 +111,7 @@ class GestureDisplay(OSDWindow):
 		
 		# Parse simpler arguments
 		self._control_with = self.args.control_with
+		self._feedback = HapticData.decode(self.args.feedback)
 		
 		return True
 	

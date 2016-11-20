@@ -186,9 +186,14 @@ class SCCDaemon(Daemon):
 				# When OSD is enabled, gesture detection is handled
 				# by scc-osd-daemon.
 				self.osd_daemon.gesture_action = action
+				feedback = None
+				if action.get_haptic():
+					feedback = action.get_haptic().encode()
 				self._osd('gesture',
 					controller = mapper.get_controller().get_id(),
-				 	control_with = what)
+				 	control_with = what,
+					feedback = feedback
+				)
 				log.debug("Gesture detection request sent to scc-osd-daemon")
 			else:
 				# Otherwise it is handled internally

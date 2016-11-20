@@ -12,8 +12,8 @@ from __future__ import unicode_literals
 
 from scc.constants import FE_STICK, FE_TRIGGER, FE_PAD, SCButtons
 from scc.constants import LEFT, RIGHT, STICK, SCButtons, SAME
+from scc.actions import HapticEnabledAction, OSDEnabledAction, MOUSE_BUTTONS
 from scc.actions import Action, NoAction, SpecialAction, ButtonAction
-from scc.actions import OSDEnabledAction, MOUSE_BUTTONS
 from scc.tools import strip_none, strip_gesture, nameof, clamp
 from scc.modifiers import Modifier, NameModifier
 from scc.constants import STICK_PAD_MAX
@@ -414,7 +414,7 @@ class PositionModifier(Modifier):
 		return self.action.describe(context)
 
 
-class GesturesAction(Action, OSDEnabledAction, SpecialAction):
+class GesturesAction(Action, OSDEnabledAction, HapticEnabledAction, SpecialAction):
 	"""
 	Stars gesture detection on pad. Recognition is handled by whatever
 	is special_actions_handler and results are then sent back to this action
@@ -422,10 +422,11 @@ class GesturesAction(Action, OSDEnabledAction, SpecialAction):
 	"""
 	SA = COMMAND = "gestures"
 	PROFILE_KEYS = ("gestures",)
-	PROFILE_KEY_PRIORITY = 2
+	PROFILE_KEY_PRIORITY = -5
 	
 	def __init__(self, *stuff):
 		OSDEnabledAction.__init__(self)
+		HapticEnabledAction.__init__(self)
 		Action.__init__(self, *stuff)
 		self.gestures = {}
 		gstr = None
