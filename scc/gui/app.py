@@ -29,7 +29,7 @@ from scc.profile import Profile
 from scc.config import Config
 
 import scc.osd.menu_generators
-import os, sys, platform, json, urllib, logging
+import os, sys, platform, re, json, urllib, logging
 log = logging.getLogger("App")
 
 class App(Gtk.Application, UserDataManager, BindingEditor):
@@ -41,6 +41,7 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 	HILIGHT_COLOR = "#FF00FF00"		# ARGB
 	OBSERVE_COLOR = "#00007FFF"		# ARGB
 	CONFIG = "scc.config.json"
+	RELEASE_URL = "https://github.com/kozec/sc-controller/releases/tag/v%s"
 	
 	def __init__(self, gladepath="/usr/share/scc",
 						imagepath="/usr/share/scc/images"):
@@ -665,7 +666,8 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 	
 	def on_daemon_alive(self, *a):
 		self.set_daemon_status("alive", True)
-		self.hide_error()
+		if not self.release_notes_visible():
+			self.hide_error()
 		self.just_started = False
 		if self.profile_switchers[0].get_file() is not None and not self.just_started:
 			self.dm.set_profile(self.current_file.get_path())
@@ -783,6 +785,12 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 			self.outdated_version = version
 			self.set_daemon_status("unknown", False)
 			self.dm.restart()
+		else:
+			# At this point, correct daemon version of daemon is running
+			# and we can check if there is anything new to inform user about
+			if self.app.config['gui']['news']['enabled']:
+				if self.app.config['gui']['news']['last_version'] != App.get_release():
+					self.check_release_notes()
 	
 	
 	def on_daemon_error(self, daemon, error):
@@ -997,9 +1005,9 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 			mnuPS.ps.get_controller().turnoff()
 	
 	
-	def show_error(self, message):
+	def show_error(self, message, ribar=None):
 		if self.ribar is None:
-			self.ribar = RIBar(message, Gtk.MessageType.ERROR)
+			self.ribar = ribar or RIBar(message, Gtk.MessageType.ERROR)
 			content = self.builder.get_object("content")
 			content.pack_start(self.ribar, False, False, 1)
 			content.reorder_child(self.ribar, 0)
@@ -1200,6 +1208,100 @@ class App(Gtk.Application, UserDataManager, BindingEditor):
 			return self.config['recent_profiles'][0]
 		except:
 			return None
+	
+	
+	@staticmethod
+	def get_release(n=3):
+		"""
+		Returns current version rounded to max. 'n' numbers.
+		( v0.14.1.3 ; n=3 -> v0.14.1 )
+		"""
+		return ".".join(DAEMON_VERSION.split(".")[0:n])
+	
+	
+	def release_notes_visible(self):
+		""" Returns True if release notes infobox is visible """
+		if not self.ribar: return False
+		riNewRelease = self.builder.get_object('riNewRelease')
+		return self.ribar._infobar == riNewRelease
+	
+	
+	def check_release_notes(self):
+		"""
+		Silently downloads release notes from github and displays infobar
+		informing user that they are ready to be displayed.
+		"""
+		url = App.RELEASE_URL % (App.get_release(),)
+		log.debug("Loading release notes from '%s'", url)
+		f = Gio.File.new_for_uri(url)
+		buffer = b""
+		
+		def stream_ready(stream, task, buffer):
+			try:
+				bytes = stream.read_bytes_finish(task)
+				if bytes.get_size() > 0:
+					buffer += bytes.get_data()
+					stream.read_bytes_async(102400, 0, None, stream_ready, buffer)
+				else:
+					self.on_got_release_notes(buffer.decode("utf-8"))
+			except Exception, e:
+				log.warning("Failed to read release notes")
+				log.exception(e)
+				return
+		
+		def http_ready(f, task, buffer):
+			try:
+				stream = f.read_finish(task)
+				assert stream
+				stream.read_bytes_async(102400, 0, None, stream_ready, buffer)
+			except Exception, e:
+				log.warning("Failed to read release notes")
+				log.exception(e)
+				return
+		
+		f.read_async(0, None, http_ready, buffer)
+	
+	
+	def on_got_release_notes(self, data):
+		"""" Called after entire HTML page of release notes is downloaded """
+		# There is actually only one thing parsed here;
+		# Sequence of words "see ... for more", in bold, containing <A> tag.
+		# If such sequence is found, it's displayed with message about extended
+		# release notes. Otherwise, shorter text and link to github is used.
+		RE_EXTENDED = r'<strong>see.*href=\"([^\"]+).*for more.*</strong>'
+		
+		if self.ribar is not None:
+			# There is already some error displayed, don't bother now...
+			return
+		
+		msg = ""
+		extended = re.search(RE_EXTENDED, data, re.IGNORECASE)
+		if extended:
+			msg += _("<a href='%s'>Click here</a> to check what's new!")
+			msg = msg % (extended.group(1), )
+		else:
+			url = App.RELEASE_URL % (App.get_release(), )
+			msg += _("Welcome to the version <b>%s</b>.")
+			msg += " " + _("<a href='%s'>Click here</a> to read release notes.")
+			msg = msg % (App.get_release(), url)
+		
+		infobar = self.builder.get_object('riNewRelease')
+		lblNewRelease = self.builder.get_object('lblNewRelease')
+		lblNewRelease.set_markup(msg)
+		ribar = RIBar(None, infobar=infobar)
+		ribar = self.show_error(None, ribar=ribar)
+		self.ribar.connect("close", self.on_new_release_dismissed)
+		self.ribar.connect("response", self.on_new_release_dismissed)
+		
+		
+	def on_new_release_dismissed(self, *a):
+		self.config['gui']['news']['last_version'] = App.get_release()
+		self.config.save() 
+	
+	
+	def on_cbNewRelease_toggled(self, cb):
+		self.app.config['gui']['news']['enabled'] = cb.get_active()
+		self.config.save()
 	
 	
 	def on_drag_data_received(self, widget, context, x, y, data, info, time):
